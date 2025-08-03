@@ -375,17 +375,29 @@ def main():
         st.session_state.scramble_moves = []
         st.session_state.solution_moves = []
         st.session_state.solving = False
+        st.session_state.animating = False
+        st.session_state.animation_step = 0
     
     # Create main layout
     col1, col2 = st.columns([2, 1])
     
     with col1:
-        # Display cube net
+        # Display cube net with animation status
+        if st.session_state.animating and st.session_state.animation_step < len(st.session_state.solution_moves):
+            current_move = st.session_state.solution_moves[st.session_state.animation_step]
+            st.markdown(f"### 🎬 Live Animation - Step {st.session_state.animation_step + 1}: **{current_move}**")
+        else:
+            st.markdown("### 🎯 Cube Net Layout")
+        
         display_cube_net(st.session_state.cube)
         
         # Show cube status
         if st.session_state.cube.is_solved():
             st.success("✅ Cube is SOLVED!")
+        elif st.session_state.animating:
+            progress = (st.session_state.animation_step + 1) / len(st.session_state.solution_moves) if st.session_state.solution_moves else 0
+            st.progress(progress)
+            st.info(f"🎬 Animation in progress... {st.session_state.animation_step + 1}/{len(st.session_state.solution_moves)} moves")
         else:
             st.info("🔄 Cube needs solving")
     
@@ -463,88 +475,55 @@ def main():
             
             with col_solve1:
                 # Animation button
-                if st.button("▶️ Animate Solution", use_container_width=True):
-                    # Create containers for dynamic updates
-                    progress_container = st.container()
-                    status_container = st.container()
-                    cube_container = st.container()
+                if not st.session_state.animating:
+                    if st.button("▶️ Animate Solution", use_container_width=True):
+                        st.session_state.animating = True
+                        st.session_state.animation_step = 0
+                        st.rerun()
+                else:
+                    # Animation controls during animation
+                    col_pause, col_stop = st.columns(2)
+                    with col_pause:
+                        if st.button("⏸️ Pause", use_container_width=True):
+                            st.session_state.animating = False
+                            st.rerun()
+                    with col_stop:
+                        if st.button("⏹️ Stop", use_container_width=True):
+                            st.session_state.animating = False
+                            st.session_state.animation_step = 0
+                            st.rerun()
+                
+                # Auto-advance animation
+                if st.session_state.animating and st.session_state.animation_step < len(st.session_state.solution_moves):
+                    # Execute next move
+                    current_move = st.session_state.solution_moves[st.session_state.animation_step]
                     
-                    # Create a copy of current scrambled cube for animation
-                    temp_cube = RubiksCube()
-                    for face in temp_cube.faces:
-                        temp_cube.faces[face] = [row[:] for row in st.session_state.cube.faces[face]]
+                    # Show current move info
+                    move_meanings = {
+                        'R': 'Right face clockwise ↻', "R'": 'Right face counter-clockwise ↺', 'R2': 'Right face 180°',
+                        'L': 'Left face clockwise ↻', "L'": 'Left face counter-clockwise ↺', 'L2': 'Left face 180°',
+                        'U': 'Up face clockwise ↻', "U'": 'Up face counter-clockwise ↺', 'U2': 'Up face 180°',
+                        'D': 'Down face clockwise ↻', "D'": 'Down face counter-clockwise ↺', 'D2': 'Down face 180°',
+                        'F': 'Front face clockwise ↻', "F'": 'Front face counter-clockwise ↺', 'F2': 'Front face 180°',
+                        'B': 'Back face clockwise ↻', "B'": 'Back face counter-clockwise ↺', 'B2': 'Back face 180°'
+                    }
                     
-                    # Show initial state
-                    with cube_container:
-                        st.markdown("### 🎬 Live Animation")
-                        cube_placeholder = st.empty()
-                        with cube_placeholder.container():
-                            st.write("**🔄 Starting state (Scrambled):**")
-                            display_cube_net(temp_cube)
+                    st.info(f"🎯 Executing: **{current_move}** - _{move_meanings.get(current_move, current_move)}_")
                     
-                    # Animate each move
-                    for i, move in enumerate(st.session_state.solution_moves):
-                        # Update progress
-                        with progress_container:
-                            progress = (i + 1) / len(st.session_state.solution_moves)
-                            st.progress(progress)
-                        
-                        # Update status with better formatting
-                        with status_container:
-                            col_status_1, col_status_2 = st.columns([3, 1])
-                            with col_status_1:
-                                st.info(f"🎯 **Step {i+1}/{len(st.session_state.solution_moves)}**: Executing move **{move}**")
-                            with col_status_2:
-                                # Show move notation meaning
-                                move_meaning = {
-                                    'R': 'Right ↻', "R'": 'Right ↺', 'R2': 'Right 180°',
-                                    'L': 'Left ↻', "L'": 'Left ↺', 'L2': 'Left 180°',
-                                    'U': 'Up ↻', "U'": 'Up ↺', 'U2': 'Up 180°',
-                                    'D': 'Down ↻', "D'": 'Down ↺', 'D2': 'Down 180°',
-                                    'F': 'Front ↻', "F'": 'Front ↺', 'F2': 'Front 180°',
-                                    'B': 'Back ↻', "B'": 'Back ↺', 'B2': 'Back 180°'
-                                }
-                                st.caption(move_meaning.get(move, move))
-                        
-                        # Execute the move
-                        temp_cube.execute_move(move)
-                        
-                        # Update cube display in real-time
-                        with cube_placeholder.container():
-                            st.write(f"**Step {i+1}: After move '{move}'**")
-                            display_cube_net(temp_cube)
-                            
-                            # Show if getting closer to solved
-                            if temp_cube.is_solved():
-                                st.success("🎉 CUBE IS SOLVED!")
-                            else:
-                                # Count how many faces are solved
-                                solved_faces = sum(1 for face in ['U', 'D', 'F', 'B', 'L', 'R'] 
-                                                 if all(temp_cube.faces[face][r][c] == temp_cube.faces[face][0][0] 
-                                                       for r in range(3) for c in range(3)))
-                                st.write(f"📊 Progress: {solved_faces}/6 faces uniform")
-                        
-                        # Pause between moves
-                        time.sleep(animation_speed)
+                    # Execute the move on the main cube
+                    st.session_state.cube.execute_move(current_move)
+                    st.session_state.animation_step += 1
                     
-                    # Final status
-                    with status_container:
-                        if temp_cube.is_solved():
-                            st.success("✅ **SOLUTION COMPLETE! CUBE SOLVED!** 🎉")
-                            st.balloons()
-                        else:
-                            st.error("❌ Solution didn't work as expected")
+                    # Auto-advance with delay
+                    time.sleep(animation_speed)
                     
-                    # Show final solved state
-                    with cube_placeholder.container():
-                        st.write("**🏆 FINAL STATE:**")
-                        display_cube_net(temp_cube)
-                        if temp_cube.is_solved():
-                            st.markdown("### 🌟 **PERFECTLY SOLVED!** 🌟")
-                        
-                    # Reset progress
-                    with progress_container:
-                        st.progress(1.0)
+                    # Check if animation is complete
+                    if st.session_state.animation_step >= len(st.session_state.solution_moves):
+                        st.session_state.animating = False
+                        st.success("✅ **ANIMATION COMPLETE! CUBE SOLVED!** 🎉")
+                        st.balloons()
+                    
+                    st.rerun()
             
             with col_solve2:
                 # Apply solution to actual cube
