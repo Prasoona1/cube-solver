@@ -65,18 +65,29 @@ class RubiksCube:
         if not KOCIEMBA_AVAILABLE:
             return None
             
-        # Kociemba expects: URFDLB faces, each with 9 positions
-        # Convert our color notation to Kociemba notation
+        # Kociemba expects 54-character string: URFDLB faces, each 9 positions
+        # Kociemba color scheme: U=0, R=1, F=2, D=3, L=4, B=5
+        # Our colors: W=White(Up), G=Green(Right), R=Red(Front), Y=Yellow(Down), B=Blue(Left), O=Orange(Back)
+        
+        kociemba_map = {
+            'W': 'U',  # White -> Up
+            'G': 'R',  # Green -> Right  
+            'R': 'F',  # Red -> Front
+            'Y': 'D',  # Yellow -> Down
+            'B': 'L',  # Blue -> Left
+            'O': 'B'   # Orange -> Back
+        }
+        
         kociemba_string = ""
         
-        # Order: U R F D L B
+        # Order must be: U R F D L B (Up, Right, Front, Down, Left, Back)
         face_order = ['U', 'R', 'F', 'D', 'L', 'B']
         
         for face in face_order:
             face_string = self.get_face_string(face)
-            # Convert each color to Kociemba notation
+            # Convert each color to Kociemba face notation
             for color in face_string:
-                kociemba_string += KOCIEMBA_COLOR_MAP.get(color, color)
+                kociemba_string += kociemba_map.get(color, 'U')  # Default to U if unknown
         
         return kociemba_string
     
@@ -232,17 +243,39 @@ class RubiksCube:
         
         try:
             cube_string = self.get_kociemba_string()
+            
+            # Debug: show cube string
+            if st.checkbox("🔍 Show debug info"):
+                st.write(f"Cube string for Kociemba: `{cube_string}`")
+                st.write(f"String length: {len(cube_string)}")
+            
             solution = kociemba.solve(cube_string)
             
-            if solution == "Error":
-                st.error("Invalid cube state - cannot be solved!")
+            if solution == "Error" or solution is None:
+                st.error("❌ Invalid cube state - cannot be solved!")
+                st.info("💡 Try scrambling the cube first, or check manual input")
                 return []
             
             # Parse solution string into individual moves
             moves = solution.split() if solution else []
+            
+            # Test the solution on a copy
+            test_cube = RubiksCube()
+            for face in test_cube.faces:
+                test_cube.faces[face] = [row[:] for row in self.faces[face]]
+            
+            # Apply solution to test cube
+            for move in moves:
+                test_cube.execute_move(move)
+            
+            if not test_cube.is_solved():
+                st.warning("⚠️ Solution verification failed - moves may not lead to solved state")
+            
             return moves
+            
         except Exception as e:
             st.error(f"Kociemba solver error: {str(e)}")
+            st.info("🔄 Falling back to simplified solver")
             return self.simple_solve()
     
     def simple_solve(self):
@@ -396,32 +429,75 @@ def main():
             solution_text = " ".join(st.session_state.solution_moves)
             st.code(solution_text, language=None)
             
-            # Animation button
-            if st.button("▶️ Animate Solution", use_container_width=True):
-                progress_bar = st.progress(0)
-                status_text = st.empty()
-                move_display = st.empty()
+            # Test solution button
+            if st.button("🧪 Test Solution", use_container_width=True):
+                # Create test cube and apply solution
+                test_cube = RubiksCube()
+                for face in test_cube.faces:
+                    test_cube.faces[face] = [row[:] for row in st.session_state.cube.faces[face]]
                 
-                # Create a copy of current cube for animation
-                temp_cube = RubiksCube()
-                for face in temp_cube.faces:
-                    temp_cube.faces[face] = [row[:] for row in st.session_state.cube.faces[face]]
+                st.write("**Before solution:**")
+                st.write(f"Solved: {test_cube.is_solved()}")
                 
-                for i, move in enumerate(st.session_state.solution_moves):
-                    progress = (i + 1) / len(st.session_state.solution_moves)
-                    progress_bar.progress(progress)
-                    status_text.text(f"Move {i+1}/{len(st.session_state.solution_moves)}: {move}")
-                    
-                    temp_cube.execute_move(move)
-                    
-                    # Update display
-                    with move_display.container():
-                        display_cube_net(temp_cube)
-                    
-                    time.sleep(0.5)
+                # Apply solution
+                for move in st.session_state.solution_moves:
+                    test_cube.execute_move(move)
                 
-                status_text.text("✅ Solution complete!")
-                st.balloons()
+                st.write("**After solution:**")
+                st.write(f"Solved: {test_cube.is_solved()}")
+                
+                if test_cube.is_solved():
+                    st.success("✅ Solution verified - it works!")
+                else:
+                    st.error("❌ Solution doesn't work - cube not solved")
+            
+            col_solve1, col_solve2 = st.columns(2)
+            
+            with col_solve1:
+                # Animation button
+                if st.button("▶️ Animate Solution", use_container_width=True):
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    
+                    # Create a copy of current scrambled cube for animation
+                    temp_cube = RubiksCube()
+                    for face in temp_cube.faces:
+                        temp_cube.faces[face] = [row[:] for row in st.session_state.cube.faces[face]]
+                    
+                    st.write("**Starting state:**")
+                    display_cube_net(temp_cube)
+                    
+                    for i, move in enumerate(st.session_state.solution_moves):
+                        progress = (i + 1) / len(st.session_state.solution_moves)
+                        progress_bar.progress(progress)
+                        status_text.text(f"Move {i+1}/{len(st.session_state.solution_moves)}: {move}")
+                        
+                        temp_cube.execute_move(move)
+                        time.sleep(0.5)
+                        
+                        # Show intermediate state every few moves
+                        if (i + 1) % 3 == 0 or i == len(st.session_state.solution_moves) - 1:
+                            st.write(f"**After move {i+1}:**")
+                            display_cube_net(temp_cube)
+                    
+                    status_text.text("✅ Solution complete!")
+                    if temp_cube.is_solved():
+                        st.success("🎉 CUBE IS SOLVED!")
+                        st.balloons()
+                    else:
+                        st.warning("⚠️ Something went wrong - cube not solved")
+            
+            with col_solve2:
+                # Apply solution to actual cube
+                if st.button("🎯 Apply Solution", use_container_width=True):
+                    # Apply solution moves to the actual cube
+                    for move in st.session_state.solution_moves:
+                        st.session_state.cube.execute_move(move)
+                    
+                    # Clear solution moves since they've been applied
+                    st.session_state.solution_moves = []
+                    st.success("✅ Solution applied to cube!")
+                    st.rerun()
         
         # Manual input section
         with st.expander("✏️ Manual Input"):
