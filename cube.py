@@ -383,7 +383,7 @@ def main():
     
     with col1:
         # Display cube net with animation status
-        if st.session_state.animating and st.session_state.animation_step < len(st.session_state.solution_moves):
+        if hasattr(st.session_state, 'animating') and st.session_state.animating and hasattr(st.session_state, 'animation_step') and st.session_state.animation_step < len(st.session_state.solution_moves):
             current_move = st.session_state.solution_moves[st.session_state.animation_step]
             st.markdown(f"### 🎬 Live Animation - Step {st.session_state.animation_step + 1}: **{current_move}**")
         else:
@@ -394,7 +394,7 @@ def main():
         # Show cube status
         if st.session_state.cube.is_solved():
             st.success("✅ Cube is SOLVED!")
-        elif st.session_state.animating:
+        elif hasattr(st.session_state, 'animating') and st.session_state.animating:
             progress = (st.session_state.animation_step + 1) / len(st.session_state.solution_moves) if st.session_state.solution_moves else 0
             st.progress(progress)
             st.info(f"🎬 Animation in progress... {st.session_state.animation_step + 1}/{len(st.session_state.solution_moves)} moves")
@@ -475,7 +475,7 @@ def main():
             
             with col_solve1:
                 # Animation button
-                if not st.session_state.animating:
+                if not getattr(st.session_state, 'animating', False):
                     if st.button("▶️ Animate Solution", use_container_width=True):
                         st.session_state.animating = True
                         st.session_state.animation_step = 0
@@ -494,7 +494,9 @@ def main():
                             st.rerun()
                 
                 # Auto-advance animation
-                if st.session_state.animating and st.session_state.animation_step < len(st.session_state.solution_moves):
+                if (getattr(st.session_state, 'animating', False) and 
+                    getattr(st.session_state, 'animation_step', 0) < len(st.session_state.solution_moves)):
+                    
                     # Execute next move
                     current_move = st.session_state.solution_moves[st.session_state.animation_step]
                     
